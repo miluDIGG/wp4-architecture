@@ -113,67 +113,148 @@ To satisfy conformance verification for this use-case, the unique identifier **S
 }
 ```
 
+## Use-case 2: Directed Pseudonyms
+
+This use-case is based on the architectural description of directed pseudonyms defined in [Pseudonyms for the EUDI Wallet](https://github.com/AltmannPeter/webuild-architecture/blob/bfa775c22a0f111f2412032da9cfc9bd26fba810/webuild-drafts/pseudonyms.md) by Peter Altmann.
+
+Within the WeBuild implementation framework, the pseudonym service **MAY** be deployed as a stand-alone service, integrated into the ITB, or managed directly by the Wallet Provider. The support for relying party-specific pseudonyms by wallet providers is explicitly mandated by [Regulation (EU) 2024/1183](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1183), Article 5a(4)(b): 
+
+> *"European Digital Identity Wallets shall enable the user, in a manner that is user-friendly, transparent, and traceable by the user, to: [...] generate pseudonyms and store them encrypted and locally within the European Digital Identity Wallet;"*
+
+Furthermore, Article 5b(9) establishes the corresponding acceptance obligations for external services:
+
+> *"Relying parties shall be responsible for carrying out the procedure for authenticating and validating person identification data and electronic attestation of attributes requested from European Digital Identity Wallets. Relying parties shall not refuse the use of pseudonyms, where the identification of the user is not required by Union or national law."*
 
 
-It should help the reader understand:
 
-- which standards or mechanisms are used
-- how the main actors interact
-- which security or trust features are important
-- what the overall outcome of the interaction is
+### Pseudonym Generation Workflow
 
-This section should stay concise. Detailed behaviour belongs in later sections.
+#### Step 1: Seed Generation by the PID Provider
+The lifecycle begins at the PID Provider (Issuer), who is responsible for establishing the cryptographic root of the user's pseudonyms.
 
-# 6. High-level Flows
+1. **Generation:** The PID Provider **SHALL** generate a cryptographically secure, high-entropy secret known as the pseudonym seed (`nym_seed`).
+2. **Requirements:** The `nym_seed` **SHALL** be generated using a cryptographically secure pseudorandom number generator (CSPRNG) and **SHALL** maintain a minimum key length of 256 bits (32 bytes) to resist brute-force vectors.
+3. **Transmission:** The seed **SHALL** be securely bound to the user's PID. It **MAY** be supplied directly by the issuer inside the credential payload or communicated securely during issuance via authorized protocols (e.g., OID4VCI flow H.5).
+
+#### Step 2: Site and Context-Specific Derivation
+Once the `nym_seed` is established, the pseudonym service **SHALL** compute the specific directed pseudonym dynamically whenever the user interacts with a Relying Party (RP). 
+
+The pseudonym value **SHALL** be calculated using $HMAC-SHA256$, combining the secret seed with the target domain and an optional application context:
+
+$$\text{Pseudonym} = \text{HMAC-SHA256}(\text{nym}_{\text{seed}}, \text{"directed:"} \mathbin{\Vert} \text{rp}_{\text{identifier}} \mathbin{\Vert} \text{ps}_{\text{context}})$$
+
+Where:
+* `rp_identifier`: The unique domain name or identifier of the Relying Party (e.g., `google.com`).
+* `ps_context`: An optional service context or session string used to isolate separate profiles under the same domain (e.g., `colab.research`). If no sub-context is required, this parameter **SHALL** be passed as an empty string (`""`).
+
+*Deterministic Result Example:* For an issuer-supplied seed of `FrvCFWys...`, an `rp_identifier` of `google.com`, and a `ps_context` of `colab.research`, the derived pseudonym output string evaluates deterministically to: `7OMvywPJlFjbblVFkjUJb6gR-AgGnxRf5j7XEBn3CFk`.
+
+#### Step 3: SD-JWT Payload Representation and Disclosure
+To support **selective disclosure**, the derived pseudonym is not exposed in plaintext inside the core credential structure. Instead, it is obfuscated using salted hashes within the SD-JWT framework.
+
+1. **Disclosure Creation:** The wallet or provider **SHALL** package the calculated pseudonym along with a unique random salt into a standardized disclosure array.
+2. **Hashing:** This disclosure array **SHALL** be transformed via a base64-encoded $SHA-256$ hash function.
+3. **Token Ingestion:** Only the resulting hash string **SHALL** be appended to the public `_sd` array of the PID token stream, ensuring that third-party observers cannot track or link the user across sessions without explicit disclosure.
+
+```json
+{
+  "iss": "[https://authentic-source.pid.se](https://authentic-source.pid.se)",
+  "sub": "7b3e9a1c-fd84-4c6e-92b1-5a63f82b410d",
+  "pid_attributes": {
+    "family_name": "Smith",
+    "given_name": "Alice",
+    "birth_date": "1970-01-01",
+    "_sd": [
+      "WyJzYWx0IiwgIjdPTXZ5d1BKbEZqYmJsVkZralVKYjZnUi1BZ0dueFImNWo3WEVCbjNDRmsiXQ"
+    ]
+  },
+  "_sd_alg": "sha-256"
+}
+```
+
+# 6. High-level Flows for Use-case 2 (Directed pseudonyms)
 
 This section describes the main interaction flows between actors.
 
-Flows should be written as step-by-step sequences that help implementers understand how the protocol operates.
+## 6.1 Directed Pseudonym Provisioning (Issuance)
 
-Example subsections:
+This flow describes how the initial cryptographic material is generated and securely bound to the user's credential.
 
-## 6.1 <Flow Name>
+### Participating Actors
+* **PID Provider (Issuer):** The authoritative body issuing the Person Identification Data.
+* **User / Wallet:** The holder requesting the credential and storing the cryptographic keys.
 
-Describe:
+### How the Interaction Begins
+The interaction begins when the User initiates a request for a new PID credential inside their Wallet application (e.g., via scanning a QR code or clicking an issuance link).
 
-- participating actors
-- how the interaction begins
-- the main sequence of actions
-- the expected outcome
+### Main Sequence of Actions
+1. The Wallet establishes a secure session with the PID Provider using the OID4VCI protocol.
+2. The PID Provider generates a cryptographically secure, high-entropy master seed (`nym_seed`).
+3. The PID Provider binds this `nym_seed` directly to the user's core profile context.
+4. The PID Provider packages the seed securely (either directly within the encrypted credential metadata or injected via OID4VCI flow H.5).
+5. The PID Provider signs the credential object and delivers it to the Wallet.
 
-Example:
+### Expected Outcome
+The Wallet successfully stores the issued PID credential along with the hidden master `nym_seed`, ready to be used for future site-specific derivations.
 
-1. <STEP 1>
-2. <STEP 2>
-3. <STEP 3>
+---
 
-# 7. Normative Requirements
+## 6.2 Directed Pseudonym Derivation and Presentation
+
+This flow describes how the wallet dynamically derives a site-specific pseudonym and presents it to a relying party using selective disclosure.
+
+### Participating Actors
+* **User / Wallet:** The holder presenting the pseudonym.
+* **Relying Party (Verifier):** The service provider requesting user authentication (e.g., `google.com`).
+
+### How the Interaction Begins
+The interaction begins when the User attempts to access a service on the Relying Party's platform that accepts pseudonymous eIDAS authentication, prompting the RP to present an OID4VP request.
+
+### Main Sequence of Actions
+1. The Relying Party transmits an OID4VP authorization request containing a `presentation_definition` that queries for a pseudonym. This request includes the `rp_identifier` (domain) and any optional `ps_context`.
+2. The Wallet parses the request and extracts the `rp_identifier` and `ps_context`.
+3. The Wallet executes an $HMAC-SHA256$ computation using the stored master `nym_seed` as the key, and the combined domain/context string as the data, yielding a deterministic directed pseudonym.
+4. The Wallet packages this derived pseudonym string into an SD-JWT disclosure array along with a random salt.
+5. The Wallet hashes the disclosure using $SHA-256$ and appends only the hash to the public token payload.
+6. The Wallet transmits the token along with the plaintext disclosure snippet back to the Relying Party via the OID4VP response.
+7. The Relying Party validates the token signature, hashes the disclosure snippet, verifies that it matches the hash inside the token's `_sd` array, and extracts the unique directed pseudonym.
+
+### Expected Outcome
+The Relying Party securely authenticates the user via a persistent, site-specific identifier without learning the user's real-world identity or master seed, preventing tracking across other relying parties.
+
+# 7. Normative Requirements for use-case 2 (Directed Pseudonyms)
 
 This section defines the normative requirements for implementations.
 
-Requirements may be grouped in the way that best fits the specification, for example by:
+## 7.1 Issuance and Provisioning Component
 
-- role
-- component
-- capability
-- protocol step
+The Pseudonym Service and PID Provider **MUST**:
 
-Example structure:
+1. Use the [OpenID for Verifiable Credential Issuance 1.0](https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html) (`OID4VCI`) protocol for secure credential provisioning and token exchange.
+2. Structure all verifiable credential metadata in compliance with the [SD-JWT-based Verifiable Digital Credentials](https://datatracker.ietf.org/doc/draft-ietf-oauth-sd-jwt-vc/) (`draft-ietf-oauth-sd-jwt-vc`) profiling specification.
+3. Obfuscate the derived pseudonyms using salted digests as mandated by [RFC 9901: Selective Disclosure for JSON Web Tokens (SD-JWT)](https://datatracker.ietf.org/doc/html/rfc9901).
 
-## 7.1 <Role or Component>
+The Pseudonym Service and PID Provider **SHOULD**:
 
-<ROLE OR COMPONENT> **MUST**:
+1. Utilize the OID4VCI flow H.5 protocol extension if the user-supplied seed method is selected for transmission.
 
-1. <REQUIREMENT 1>
-2. <REQUIREMENT 2>
+The Pseudonym Service and PID Provider **MUST NOT**:
 
-<ROLE OR COMPONENT> **SHOULD**:
+1. Transmit the raw, unhashed master pseudonym seed (`nym_seed`) within the public unencrypted token payload structures.
 
-1. <RECOMMENDATION 1>
 
-<ROLE OR COMPONENT> **MUST NOT**:
 
-1. <PROHIBITED BEHAVIOUR>
+## 7.2 Presentation and Verification Component 
+
+The Wallet and Relying Party (RP) **MUST**:
+
+1. Utilize the [OpenID for Verifiable Presentations 1.0](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html) (`OID4VP`) transaction protocol to transmit identity tokens from the wallet container to the verifier.
+2. Formulate and parse queries for selective attribute disclosure using the syntax defined in the [DIF Presentation Exchange 2.0](https://identity.foundation/presentation-exchange/spec/v2.0.0/) framework.
+3. Validate the plaintext salts, disclosure arrays, and corresponding $SHA-256$ digests according to the validation rules of [RFC 9901: Selective Disclosure for JSON Web Tokens (SD-JWT)](https://datatracker.ietf.org/doc/html/rfc9901).
+
+The Relying Party (RP) **MUST NOT**:
+
+1. Refuse or block the processing of a validly presented directed pseudonym, unless explicit real-world identification of the natural person is legally mandated by Union or national law.
 
 # 8. Interface Definitions
 
