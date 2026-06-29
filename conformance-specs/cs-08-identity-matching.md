@@ -40,6 +40,7 @@ This specification is based on [PR #223](https://github.com/webuild-consortium/w
 
 This CS only includes identity matching for new users. Identity matching of persons in existing records is out of scope.
 Althoug there are many more potential solutions for identity matching, these three have been chosen for their coverage of use-cases and degrees of implementation complexity.
+
 # 3. Normative Language
 
 The keywords **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHOULD**, **SHOULD NOT**, **RECOMMENDED**, **MAY**, and **OPTIONAL** are to be interpreted as described in [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2119).
@@ -54,15 +55,65 @@ Only roles that matter for this specification should be included.
 
 Examples may include:
 
-- **Holder:** person or organisation controlling the Wallet Unit
-- **Issuer:** entity issuing credentials or attestations
-- **Verifier:** entity requesting and validating presentations
-- **Authorisation Server:** component supporting OAuth / OpenID interactions
+- **PID-Issuer:** entity issuing the PID and supplying a seed to enable reidentification
+- **Wallet-provider:** entity providing the EUDIW and pseudonym service
+- **Verifier / Relying Party:** entity requesting and validating presentations
+- **Issuer of Photo-ID:** entity issuing an official Photo-ID
 - **Trust Provider:** component or service publishing trust-related information
+- **Pseudonym Service:** service that generates the directed pseudonym
 
 # 5. Protocol Overview
 
 This section gives a short explanation of how the protocol or function works at a high level.
+
+## Use-case 1: Official unique persistent identifier from authentic source in PID 
+The PID Provider **SHALL** include an official unique persistent identifier as an attribute within the Person Identification Data (PID) credential. To protect user privacy, the PID implementation **SHALL** support Selective Disclosure (SD) for this identifier attribute.
+
+#### Identifier Requirements and Constraints
+1. Uniqueness and Persistency: The identifier **SHALL** remain unique and persistent across the scope of all WE BUILD conformance testing environments.
+2. National Identifiers: Where legally permissible and technically available, implementations **MAY** utilize official national unique natural person identifiers (e.g., the Swedish *personnummer*).
+3. Fallback Identifier (UUIDv4): In jurisdictions where a national persistent identifier is unavailable, or where privacy constraints restrict its transmission, a Version 4 Universally Unique Identifier (UUIDv4) **SHALL** be generated as a fallback. 
+   * Generated UUIDv4 values **SHALL** strictly conform to [RFC 9562](https://www.rfc-editor.org/info/rfc9562/#name-uuid-version-4), utilizing lowercase hexadecimal strings partitioned by hyphens into the standard `8-4-4-4-12` character pattern.
+     
+#### Schema Implementation
+To satisfy conformance verification for this use-case, the unique identifier **SHALL** be integrated into the `properties` block of the official PID schema definition ([ds002-pid-sd-jwt.json](https://github.com/webuild-consortium/webuild-attestation-rulebooks-catalog/blob/main/data-schemas/sd-jwt/ds002-pid-sd-jwt.json)) as specified in the following structural definition:
+
+```json
+"properties": {
+  "family_name": {
+    "type": "string",
+    "description": "Current last name(s), surname(s), or primary identifier of the user.",
+    "examples": [
+      "Smith"
+    ]
+  },
+  "given_name": {
+    "type": "string",
+    "description": "Current first name(s) of the user.",
+    "examples": [
+      "Alice"
+    ]
+  },
+  "unique_id": {
+    "type": "string",
+    "format": "uuid",
+    "description": "A unique, persistent identifier such as a UUIDv4.",
+    "examples": [
+      "7b3e9a1c-fd84-4c6e-92b1-5a63f82b410d"
+    ]
+  },
+  "birth_date": {
+    "type": "string",
+    "format": "date",
+    "description": "The date of birth of the user.",
+    "examples": [
+      "1970-01-01"
+    ]
+  }
+}
+```
+
+
 
 It should help the reader understand:
 
