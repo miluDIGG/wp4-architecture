@@ -1,7 +1,12 @@
 
-# WE BUILD - Conformance Specification: <TITLE>
+# WE BUILD - Conformance Specification: Identity Matching
 
-Version 0.1
+Version 0.5 Date: 30-June-2026
+
+Authors / Contributors: 
+- Michelle Ludovici
+- Malin Norlander
+- Laurent Loup
 
 ## Table of Contents
 
