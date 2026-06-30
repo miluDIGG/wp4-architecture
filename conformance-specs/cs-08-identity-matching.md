@@ -38,8 +38,16 @@ This specification is based on [PR #223](https://github.com/webuild-consortium/w
 
 # 2. Scope
 
-This CS only includes identity matching for new users. Identity matching of persons in existing records is out of scope.
-Althoug there are many more potential solutions for identity matching, these three have been chosen for their coverage of use-cases and degrees of implementation complexity.
+This Conformance Specification focuses exclusively on identity matching and session continuity for users operating within the WE BUILD persistent and pseudonymous identification frameworks.
+
+### In Scope
+* Initial Onboarding: Identity matching and verification workflows for users connecting to a Relying Party (RP) for the first time using the conformance profiles defined in this document.
+* Session Continuity (Returning Pseudonymous Users) The ongoing ability for a user to return to a previously visited RP and resume an official matter securely, leveraging the persistence of a derived directed pseudonym or unique identifier.
+
+### Out of Scope
+* Legacy/Historic User Migration: Database reconciliation, identity matching, or account-linking for historic users who established local official records or accessed digital e-services prior to the deployment of these wallet-based pseudonym profiles.
+
+Although there are many potential structural solutions for managing identity matching across borders, these three specific use-cases have been chosen for their coverage of varying legal mandates and progressive degrees of technical implementation complexity.
 
 # 3. Normative Language
 
@@ -56,11 +64,11 @@ Only roles that matter for this specification should be included.
 Examples may include:
 
 - **PID-Issuer:** entity issuing the PID and supplying a seed to enable reidentification
-- **Wallet-provider:** entity providing the EUDIW and pseudonym service
+- **Wallet-provider:** entity providing the EUDIW 
 - **Verifier / Relying Party:** entity requesting and validating presentations
 - **Issuer of Photo-ID:** entity issuing an official Photo-ID
 - **Trust Provider:** component or service publishing trust-related information
-- **Pseudonym Service:** service that generates the directed pseudonym
+- **Pseudonym Service:** service that generates the directed pseudonym. This service could be stand-alone, integrated in the ITB, or managed directly by the Wallet-provider
 
 # 5. Protocol Overview
 
@@ -113,6 +121,8 @@ To satisfy conformance verification for this use-case, the unique identifier **S
 }
 ```
 
+This use-case eliminates the need for identity matching and therefore does not need any high-level flows or other details in the specification. 
+
 ## Use-case 2: Directed Pseudonyms
 
 This use-case is based on the architectural description of directed pseudonyms defined in [Pseudonyms for the EUDI Wallet](https://github.com/AltmannPeter/webuild-architecture/blob/bfa775c22a0f111f2412032da9cfc9bd26fba810/webuild-drafts/pseudonyms.md) by Peter Altmann.
@@ -144,33 +154,40 @@ The pseudonym value **SHALL** be calculated using $HMAC-SHA256$, combining the s
 $$\text{Pseudonym} = \text{HMAC-SHA256}(\text{nym}_{\text{seed}}, \text{"directed:"} \mathbin{\Vert} \text{rp}_{\text{identifier}} \mathbin{\Vert} \text{ps}_{\text{context}})$$
 
 Where:
-* `rp_identifier`: The unique domain name or identifier of the Relying Party (e.g., `google.com`).
-* `ps_context`: An optional service context or session string used to isolate separate profiles under the same domain (e.g., `colab.research`). If no sub-context is required, this parameter **SHALL** be passed as an empty string (`""`).
+* `rp_identifier`: The unique domain name or identifier of the Relying Party (e.g., `google.com`). This parameter is REQUIRED and SHALL be used to isolate the resulting pseudonym to that specific Relying Party.
+* ps_context: An application, service, or session sub-context string used to isolate separate profiles under the same domain (e.g., colab.research). If no sub-context isolation is required for the transaction, this parameter SHALL be passed as an empty string ("") to ensure a deterministic cryptographic concatenation block.
 
 *Deterministic Result Example:* For an issuer-supplied seed of `FrvCFWys...`, an `rp_identifier` of `google.com`, and a `ps_context` of `colab.research`, the derived pseudonym output string evaluates deterministically to: `7OMvywPJlFjbblVFkjUJb6gR-AgGnxRf5j7XEBn3CFk`.
 
-#### Step 3: SD-JWT Payload Representation and Disclosure
-To support **selective disclosure**, the derived pseudonym is not exposed in plaintext inside the core credential structure. Instead, it is obfuscated using salted hashes within the SD-JWT framework.
+For an executable reference implementation of this derivation formula and test vectors, see the [WE BUILD Pseudonym Jupyter Notebook](https://github.com/AltmannPeter/webuild-architecture/blob/bfa775c22a0f111f2412032da9cfc9bd26fba810/webuild-drafts/pseudonyms.ipynb).
 
-1. **Disclosure Creation:** The wallet or provider **SHALL** package the calculated pseudonym along with a unique random salt into a standardized disclosure array.
-2. **Hashing:** This disclosure array **SHALL** be transformed via a base64-encoded $SHA-256$ hash function.
-3. **Token Ingestion:** Only the resulting hash string **SHALL** be appended to the public `_sd` array of the PID token stream, ensuring that third-party observers cannot track or link the user across sessions without explicit disclosure.
+#### Step 3: SD-JWT Payload Representation and Disclosure
+
+To support selective disclosure, the derived pseudonym is not exposed in plaintext inside the core credential structure. Instead, it is obfuscated using salted hashes within the SD-JWT framework.
+1. Disclosure Creation: The wallet or provider SHALL package the calculated pseudonym along with a unique random salt and the claim key into a standardized JSON disclosure array (e.g., ["_2BB69p5Yxl9Z_g3Q", "unique_id", "7OMvywPJlFjbblVFkjUJb6gR-AgGnxRf5j7XEBn3CFk"]).
+2. Base64URL Encoding: This disclosure array string SHALL be encoded into a Base64URL string without padding.
+3. Hashing: The Base64URL string SHALL be transformed via a $SHA-256$ hash function, and the resulting binary digest SHALL be encoded into a Base64URL string.
+4. Token Ingestion: Only the final Base64URL-encoded hash string SHALL be appended to the public _sd array of the PID token stream. This ensures that third-party observers cannot track, decode, or link the user across sessions without the wallet explicitly presenting the corresponding disclosure snippet.
 
 ```json
 {
-  "iss": "[https://authentic-source.pid.se](https://authentic-source.pid.se)",
+  "iss": "https://authentic-source.pid.se",
   "sub": "7b3e9a1c-fd84-4c6e-92b1-5a63f82b410d",
-  "pid_attributes": {
-    "family_name": "Smith",
-    "given_name": "Alice",
-    "birth_date": "1970-01-01",
-    "_sd": [
-      "WyJzYWx0IiwgIjdPTXZ5d1BKbEZqYmJsVkZralVKYjZnUi1BZ0dueFImNWo3WEVCbjNDRmsiXQ"
-    ]
-  },
+  "family_name": "Smith",
+  "given_name": "Alice",
+  "birth_date": "1970-01-01",
+  "_sd": [
+    "jsu9Knu7F_83Gv_Dsz89KlA73mN_oq1WxzP6Klm3bX0"
+  ],
   "_sd_alg": "sha-256"
 }
 ```
+
+## Use-case 3: Enrichment of PID with Photo-ID
+
+> [!TBD]
+> BY LAURENT LOUP
+
 
 # 6. High-level Flows for Use-case 2 (Directed pseudonyms)
 
@@ -211,13 +228,13 @@ This flow describes how the wallet dynamically derives a site-specific pseudonym
 The interaction begins when the User attempts to access a service on the Relying Party's platform that accepts pseudonymous eIDAS authentication, prompting the RP to present an OID4VP request.
 
 ### Main Sequence of Actions
-1. The Relying Party transmits an OID4VP authorization request containing a `presentation_definition` that queries for a pseudonym. This request includes the `rp_identifier` (domain) and any optional `ps_context`.
+1. The Relying Party transmits an OID4VP authorization request containing a `presentation_definition` that queries for a "unique_id". This request includes the mandatory `rp_identifier` (domain) and an optional `ps_context`.
 2. The Wallet parses the request and extracts the `rp_identifier` and `ps_context`.
-3. The Wallet executes an $HMAC-SHA256$ computation using the stored master `nym_seed` as the key, and the combined domain/context string as the data, yielding a deterministic directed pseudonym.
+3. The Wallet executes an $HMAC-SHA256$ computation using the stored master nym_seed as the cryptographic key, and the combined domain/context data string as the message data. The wallet SHALL inject the extracted rp_identifier into this calculation to ensure that a unique, site-specific pseudonym is generated for each unique Relying Party, alongside the optional ps_context string.
 4. The Wallet packages this derived pseudonym string into an SD-JWT disclosure array along with a random salt.
-5. The Wallet hashes the disclosure using $SHA-256$ and appends only the hash to the public token payload.
-6. The Wallet transmits the token along with the plaintext disclosure snippet back to the Relying Party via the OID4VP response.
-7. The Relying Party validates the token signature, hashes the disclosure snippet, verifies that it matches the hash inside the token's `_sd` array, and extracts the unique directed pseudonym.
+5. The Wallet retrieves the pre-computed, signed SD-JWT credential containing the obfuscated pseudonym hash within its _sd array, alongside the corresponding cleartext disclosure snippet array (containing the salt, key, and raw pseudonym value) that was generated during the issuance phase.
+6. The Wallet transmits the unchanged, signed token along with the plaintext disclosure snippet back to the Relying Party via the OID4VP response interface.
+7. The Relying Party validates the Issuer's cryptographic signature on the token envelope, runs the plaintext disclosure snippet through a $SHA-256$ hash function, verifies that the resulting digest matches one of the values inside the token's signed _sd array, and securely extracts the unique directed pseudonym.
 
 ### Expected Outcome
 The Relying Party securely authenticates the user via a persistent, site-specific identifier without learning the user's real-world identity or master seed, preventing tracking across other relying parties.
