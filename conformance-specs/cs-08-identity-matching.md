@@ -43,11 +43,11 @@ This specification is based on [PR #223](https://github.com/webuild-consortium/w
 
 # 2. Scope
 
-This Conformance Specification focuses exclusively on identity matching and session continuity for users operating within the WE BUILD persistent and pseudonymous identification frameworks.
+This Conformance Specification focuses exclusively on identity matching for users operating within WE BUILD.
 
 ### In Scope
 * Initial Onboarding: Identity matching and verification workflows for users connecting to a Relying Party (RP) for the first time using the conformance profiles defined in this document.
-* Session Continuity (Returning Pseudonymous Users) The ongoing ability for a user to return to a previously visited RP and resume an official matter securely, leveraging the persistence of a derived directed pseudonym or unique identifier.
+* Returning Pseudonymous Users: The ongoing ability for a user to return to a previously visited RP and resume an official matter securely, leveraging the persistence of a derived directed pseudonym or unique identifier.
 
 ### Out of Scope
 * Legacy/Historic User Migration: Database reconciliation, identity matching, or account-linking for historic users who established local official records or accessed digital e-services prior to the deployment of these wallet-based pseudonym profiles.
