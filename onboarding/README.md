@@ -17,18 +17,15 @@ CS-07 (DC API), CS-10 (Revocation Mechanism) and CS-017 Directory & Discovery, a
 
 This guidance distinguishes between support aimed at roles for onboarding and support aimed at use cases. For use-case specific onboarding requirements, use-cases will provide you with further information. 
 
-## ITB onboarding
 ## Testing in the ITB
 
 Testing takes place in the WE BUILD Interoperability Test Bed (ITB): [ITB test bed](https://dev-i4mlab.aegean.gr/itb)
-
-### Onboarding to the ITB
 
 Please read the [ITB user guide](https://github.com/webuild-consortium/wp4-interop-test-bed/blob/main/docs/user-guide-interoperability-test-bed.md) for instructions on onboarding.
 
 Provide the necessary information through the Slack channel [*#itb-support*](https://we-build-consortium.slack.com/archives/C09K65GLKT2), and the ITB team will set you up with an account.
 
-### What you need to provide
+<!-- ### What you need to provide
 
 - **Endpoints:** base URLs for dev, acc and prod.
 - **Security mode:** bearer, mTLS or x-api-key.
@@ -56,7 +53,7 @@ Use one ITB *System* per environment, so that your evidence stays reproducible.
 
 > **Note:** If you skip a test (for example mdoc), explain why in writing to the Test Group when you submit your report.
 
-
+-->
 
 ## Step 1: Identify your role
 
@@ -77,14 +74,14 @@ For role descriptions, see:
 - ARF 3.0.0, Chapter 3 – Roles within the EUDI Wallet ecosystem: <https://eudi.dev/3.0.0/main/03-roles-within-the-eudi-wallet-ecosystem>
 - WE BUILD Architecture & Integration Blueprint (D4.1), Section 3.2 – role descriptions as applied in WE BUILD: <https://webuild-consortium.github.io/wp4-architecture/blueprint>
 
-## Step 2: Use the role template
+## Step 2: Read instructions for your role and use the role template
 
-Each role will have an onboarding template that specifies:
+Each role will have
+- onboarding instructions here that specify
+  - the conformance specifications (CS) the participant must conform to, and
+  - the ITB test cases the participant must pass 
 
-- the conformance specifications (CS) the participant must conform to, and
-- the ITB test cases the participant must pass (for wallets).
-
-
+Furthermore there might be use-case specific requirements that your role might have to follow. Contact your use-cases for those. 
 
 ## Onboarding for Relying Parties
 
@@ -99,7 +96,7 @@ As part of registration, the RP:
 > [!NOTE]
 > The registration is done through filling out a form
 
-### 2. Ensure functionality to verify presentations, i.e. conform to conformance specifications (CS)
+### 2. Ensure functionality to verify presentations
 
 The RP must be able to verify presentations. There are two routes:
 
@@ -140,37 +137,57 @@ SUT = System under test
 
 
 
----
-
+---------------------------------------------------------------------------
 ## Onboarding for EBWOID Issuers
 
-### Step 1: Register on the EBWOID provider trust list
+### 1. Register on the EBWOID provider trust list
 
-- **Precondition:** It is checked whether you are on the GA – just a form.
-- You need to create keys to sign the trust list. *(Link to info – TBD)*
+The EBWOID issuer registers on the EBWOID provider trust list. Registration is done by filling out a form; as a precondition, it is checked that you are a party to the Grant Agreement (GA).
 
-### Step 2: Ensure functionality to issue EBWOID
+> [!NOTE]
+> You need to generate the signing keys and certificate you will use to sign EBWOIDs. Your certificate is what wallets and verifiers check against the trust list. *(Link to info – TBD)*
 
-Relevant conformance specifications: CS-01, CS-02, CS-04, CS-05, CS-12 (payment)
+### 2. Ensure functionality to issue EBWOIDs, i.e. conform to conformance specifications (CS)
 
-You can issue yourself, or use a QTSP to issue for you. If a QTSP issues the EBWOID, the EBWOID issuer becomes an Authentic Source.
+The EBWOID issuer must be able to issue EBWOIDs to business wallets. There are two routes:
 
-What is being verified: the EBWOID issuer is on the access certificate.
+- **Do it yourself** – the EBWOID issuer implements issuance functionality itself.
+- **Use a QTSP** – a QTSP issues the EBWOID on your behalf. In this case, the EBWOID issuer acts as the Authentic Source for the QTSP.
 
-### Step 3: Conform to test cases in the ITB
+What is verified: the certificate that signs the EBWOID must chain to your entry on the EBWOID provider trust list.
 
-- Trust framework integration test suite (only for wallets at the moment)
-  - Issuers and verifiers will be added soon *(check with George for timeframe)*
-- RP conformance test suite (for EBWOID issuers)
-  - Test cases 1 and 3
-- TS12 test suite (payment)
+### 3. EBWOID Issuer Tests in the Interoperability Test Bed (ITB)
+
+**Test 001 – Issuer VCI 1.0** and **Test 003 – Issuer VCI 1.0 – PIN**
+
+In the **Relying Parties suite**, the ITB acts as the wallet. A headless reference wallet inside the ITB+ receives your credential offer and completes the issuance flow, so nobody needs to scan a QR code.
+
+**Good to know**
+- Create a live credential offer URI (`openid-credential-offer://`) with your issuer and paste it into the ITB at step 0.
+- The ITB sends the URI to the headless wallet (`POST /session`), which completes the issuance. The ITB then collects the wallet logs for the report.
+- Test 001 covers the authorisation code and pre-authorised code flows. Test 003 covers the pre-authorised code flow with a transaction code (PIN); run it only if you support that flow.
+- *Optional:* if your issuer metadata contains a registration certificate, the headless wallet checks that the credential type you issue is registered. The headless wallet currently reads a top-level `registration_certificate` / `registration_cert` member, not the `issuer_info` placement defined in ETSI TS 119 472-3 cl. 4.2.3.
+- A PASS shows that the headless wallet could complete issuance with your issuer. It does not show that your issuer verifies the business wallet's attestation (BWUA) correctly (CS-05 §7.3).
+- If you only support SD-JWT VC, you can skip mdoc (deferred in CS-01). State the reason when you submit your report.
+
+> [!NOTE]
+> There are currently no trust framework tests where an issuer is the system under test; issuers and verifiers will be added to the Trust Framework Integration suite *(check with George for timeframe)*. There are no ITB tests for CS-05. The issuer tests are positive-path only.
+
+**Legend:** 🟢 Obligatory · 🟡 Optional · SUT = System under test
+
+| Applicable CS | Comment | ITB test suite / test case (issuer as SUT) |
+|---|---|---|
+| 🟢 CS-01 Credential Issuance (v1.3) | Applies to every EBWOID issuer: it defines the Issuer and Authorisation Server roles in OpenID4VCI issuance (§4, §7). |  Test 001 – Issuer VCI 1.0; Test 003 – Issuer VCI 1.0 – PIN* (if you support pre-authorised code with transaction code) |
+| 🟢 CS-05 Business Wallet Unit Attestation (BWUA) Lifecycle (v1.1) | Applies to every EBWOID issuer: EBWOIDs are issued to business wallets, and the issuer must verify the BWUA, its bindings and its revocation status before and after issuance (§7.2, §7.3). | None. No ITB tests for CS-05. |
+| 🟡 CS-04 Wallet Unit Attestation (WUA) Lifecycle (v1.1) | Applies if you issue EBWOIDs to a natural-person EUDI Wallet: the issuer must verify the WUA and re-check its revocation status (§7.2, §7.3). | None for issuer. The Trust Framework Integration suite checks the WUA with the wallet as SUT. |
+| 🟡 CS-02 Credential Presentation (v1.1, approved) | Applies if you request a presentation (for example the legal representative's PID) as a condition of issuance: the issuer then acts as a Verifier (CS-05 §7.3, Issuer item 4). | Relying Parties suite: Test 002 – Verifier VP 1.0 
 
 ### Out of scope for this onboarding guide
 
 - **Attestation catalogue:** Registering your attestations in the attestation catalogue (structure, whether rulebooks are followed, version). No CS and no test cases.
-- **Revocation**
+- **Revocation** (CS-10).
+------------------------------------------------------------------------
 
----
 
 ## Onboarding for Wallet Providers
 
